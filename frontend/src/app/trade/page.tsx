@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Header from "@/components/layout/Header";
+import AdvancedTradingChart from "@/components/trading/AdvancedTradingChart";
 import { useWalletStore, useMarketStore, useTradingStore } from "@/store";
 import { formatUsd, formatCrypto, formatPercent } from "@/lib/utils";
 import { TRADING_PAIRS } from "@/lib/contracts";
@@ -565,12 +566,22 @@ function OpenOrders() {
   );
 }
 
-// ── Main Trade Page ──────────────────────────────────────────────
+// ── Main Trade Page (TradingView-Like) ───────────────────────
 export default function TradePage() {
   const { selectedPair, fetchPrices, setSelectedPair } = useMarketStore();
   const [mounted, setMounted] = useState(false);
   const [timeframe, setTimeframe] = useState<Timeframe>("1h");
   const [chartType, setChartType] = useState<ChartType>("candlestick");
+  const [showIndicators, setShowIndicators] = useState(false);
+  const [indicators, setIndicators] = useState({
+    ma20: false,
+    ma50: true,
+    ma200: false,
+    rsi: false,
+    macd: false,
+    bollinger: false,
+    volume: true,
+  });
 
   useEffect(() => {
     setMounted(true);
@@ -584,104 +595,202 @@ export default function TradePage() {
   const timeframes: Timeframe[] = ["1m", "5m", "15m", "1h", "4h", "1d", "1w", "1m_year"];
   const chartTypes: ChartType[] = ["candlestick", "line", "area"];
 
+  const toggleIndicator = (key: keyof typeof indicators) => {
+    setIndicators((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-bg-primary">
       <Header />
-      <main className="max-w-[1600px] mx-auto px-3 sm:px-4 py-4 space-y-4">
-        {/* Pair Selector */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {TRADING_PAIRS.map((p) => (
-            <button
-              key={p.label}
-              onClick={() => setSelectedPair(p.base, p.quote)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
-                selectedPair.base === p.base && selectedPair.quote === p.quote
-                  ? "bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20"
-                  : "text-text-secondary hover:text-text-primary border border-transparent hover:border-border-subtle"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-          {/* Chart */}
-          <div className="lg:col-span-7 glass-panel overflow-hidden">
-            <div className="px-4 py-3 border-b border-border-subtle space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-text-primary">
-                  {selectedPair.base}/{selectedPair.quote}
-                </h2>
-                <div className="flex items-center gap-2">
-                  {/* Chart Type Selector */}
-                  <div className="flex gap-1 bg-bg-primary rounded-lg p-1">
-                    {chartTypes.map((ct) => (
-                      <button
-                        key={ct}
-                        onClick={() => setChartType(ct)}
-                        title={ct.charAt(0).toUpperCase() + ct.slice(1)}
-                        className={`w-8 h-8 rounded flex items-center justify-center text-xs font-semibold transition-all ${
-                          chartType === ct
-                            ? "bg-accent-cyan text-bg-elevated"
-                            : "text-text-muted hover:text-text-secondary hover:bg-bg-hover"
-                        }`}
-                      >
-                        {ct === "candlestick" ? "📊" : ct === "line" ? "📈" : "📉"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Timeframe Selector */}
-              <div className="flex gap-1 flex-wrap">
-                {timeframes.map((tf) => (
+      <main className="flex h-[calc(100vh-64px)]">
+        {/* Main Chart Area */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Toolbar */}
+          <div className="glass-panel border-b border-border-subtle px-4 py-3 space-y-3">
+            {/* Top Row: Pair & Controls */}
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                {TRADING_PAIRS.map((p) => (
                   <button
-                    key={tf}
-                    onClick={() => setTimeframe(tf)}
-                    className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                      timeframe === tf
-                        ? "bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/30"
-                        : "text-text-muted hover:text-text-secondary border border-transparent hover:bg-bg-hover"
+                    key={p.label}
+                    onClick={() => setSelectedPair(p.base, p.quote)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+                      selectedPair.base === p.base && selectedPair.quote === p.quote
+                        ? "bg-accent-cyan/15 text-accent-cyan border border-accent-cyan/30 font-semibold"
+                        : "text-text-secondary hover:text-text-primary border border-border-subtle hover:border-border-medium"
                     }`}
                   >
-                    {tf === "1m_year" ? "1Y" : tf.toUpperCase()}
+                    {p.label}
                   </button>
                 ))}
               </div>
+
+              <div className="flex items-center gap-2">
+                {/* Chart Type Selector */}
+                <div className="flex gap-0.5 bg-bg-primary rounded-lg p-1 border border-border-subtle">
+                  {chartTypes.map((ct) => (
+                    <button
+                      key={ct}
+                      onClick={() => setChartType(ct)}
+                      title={ct.charAt(0).toUpperCase() + ct.slice(1)}
+                      className={`w-8 h-8 rounded flex items-center justify-center text-xs font-semibold transition-all ${
+                        chartType === ct
+                          ? "bg-accent-cyan text-bg-primary"
+                          : "text-text-muted hover:text-text-secondary"
+                      }`}
+                    >
+                      {ct === "candlestick" ? "📊" : ct === "line" ? "📈" : "📉"}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Indicators Toggle */}
+                <button
+                  onClick={() => setShowIndicators(!showIndicators)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    showIndicators
+                      ? "bg-accent-violet/20 text-accent-violet border border-accent-violet/30"
+                      : "bg-bg-primary text-text-secondary border border-border-subtle hover:text-text-primary"
+                  }`}
+                >
+                  📈 Indicators {showIndicators ? "✓" : ""}
+                </button>
+              </div>
             </div>
-            <PriceChart 
-              pair={selectedPair}
-              timeframe={timeframe}
-              chartType={chartType}
-              onTimeframeChange={setTimeframe}
-              onChartTypeChange={setChartType}
-            />
+
+            {/* Timeframe Selector */}
+            <div className="flex gap-1 flex-wrap">
+              {timeframes.map((tf) => (
+                <button
+                  key={tf}
+                  onClick={() => setTimeframe(tf)}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    timeframe === tf
+                      ? "bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/30"
+                      : "text-text-muted hover:text-text-secondary border border-transparent hover:bg-bg-hover"
+                  }`}
+                >
+                  {tf === "1m_year" ? "1Y" : tf.toUpperCase()}
+                </button>
+              ))}
+            </div>
+
+            {/* Indicators Panel */}
+            {showIndicators && (
+              <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2 pt-2 border-t border-border-subtle">
+                <IndicatorToggle
+                  label="MA 20"
+                  value={indicators.ma20}
+                  color="bg-orange-500/20 text-orange-400"
+                  onClick={() => toggleIndicator("ma20")}
+                />
+                <IndicatorToggle
+                  label="MA 50"
+                  value={indicators.ma50}
+                  color="bg-blue-500/20 text-blue-400"
+                  onClick={() => toggleIndicator("ma50")}
+                />
+                <IndicatorToggle
+                  label="MA 200"
+                  value={indicators.ma200}
+                  color="bg-purple-500/20 text-purple-400"
+                  onClick={() => toggleIndicator("ma200")}
+                />
+                <IndicatorToggle
+                  label="RSI"
+                  value={indicators.rsi}
+                  color="bg-pink-500/20 text-pink-400"
+                  onClick={() => toggleIndicator("rsi")}
+                />
+                <IndicatorToggle
+                  label="MACD"
+                  value={indicators.macd}
+                  color="bg-cyan-500/20 text-cyan-400"
+                  onClick={() => toggleIndicator("macd")}
+                />
+                <IndicatorToggle
+                  label="Bollinger"
+                  value={indicators.bollinger}
+                  color="bg-amber-500/20 text-amber-400"
+                  onClick={() => toggleIndicator("bollinger")}
+                />
+                <IndicatorToggle
+                  label="Volume"
+                  value={indicators.volume}
+                  color="bg-green-500/20 text-green-400"
+                  onClick={() => toggleIndicator("volume")}
+                />
+              </div>
+            )}
           </div>
 
-          {/* Order Book */}
-          <div className="lg:col-span-2">
-            <OrderBookDisplay pair={selectedPair} />
-          </div>
-
-          {/* Order Form */}
-          <div className="lg:col-span-3">
-            <OrderForm pair={selectedPair} />
+          {/* Chart Container */}
+          <div className="flex-1 min-h-0 glass-panel overflow-hidden">
+            <div className="w-full h-full">
+              <AdvancedTradingChart
+                pair={selectedPair}
+                timeframe={timeframe}
+                chartType={chartType}
+                indicators={indicators}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Bottom Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <div className="lg:col-span-2">
-            <OpenOrders />
+        {/* Right Sidebar */}
+        <div className="w-96 border-l border-border-subtle flex flex-col gap-3 p-3 overflow-y-auto bg-bg-primary">
+          {/* Order Form */}
+          <div>
+            <OrderForm pair={selectedPair} />
           </div>
+
+          {/* Order Book */}
+          <div>
+            <OrderBookDisplay pair={selectedPair} />
+          </div>
+
+          {/* Recent Trades */}
           <div>
             <RecentTrades pair={selectedPair} />
           </div>
         </div>
       </main>
+
+      {/* Bottom Section: Open Orders */}
+      <div className="border-t border-border-subtle bg-bg-primary">
+        <div className="max-w-full overflow-hidden">
+          <OpenOrders />
+        </div>
+      </div>
     </div>
+  );
+}
+
+// ── Indicator Toggle Button ──────────────────────────────────────
+function IndicatorToggle({
+  label,
+  value,
+  color,
+  onClick,
+}: {
+  label: string;
+  value: boolean;
+  color: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-2 py-1.5 rounded text-2xs font-semibold transition-all border ${
+        value
+          ? `${color} border-current`
+          : "bg-bg-hover text-text-muted border-border-subtle hover:border-border-medium"
+      }`}
+    >
+      {label} {value ? "✓" : ""}
+    </button>
   );
 }
