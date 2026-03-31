@@ -7,100 +7,220 @@ import { formatUsd, formatCrypto, formatPercent } from "@/lib/utils";
 import { TRADING_PAIRS } from "@/lib/contracts";
 import type { OrderSide, OrderType } from "@/types";
 
-// ── Price Chart (lightweight-charts placeholder) ──────────────────
-function PriceChart({ pair }: { pair: { base: string; quote: string } }) {
+// ── Types ────────────────────────────────────────────────────────
+type Timeframe = "1m" | "5m" | "15m" | "1h" | "4h" | "1d" | "1w" | "1m_year";
+type ChartType = "candlestick" | "line" | "area";
+
+interface Candle {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+}
+
+// ── Price Chart with Advanced Options ────────────────────────────
+function PriceChart({ 
+  pair, 
+  timeframe,
+  chartType,
+  onTimeframeChange,
+  onChartTypeChange
+}: { 
+  pair: { base: string; quote: string };
+  timeframe: Timeframe;
+  chartType: ChartType;
+  onTimeframeChange: (tf: Timeframe) => void;
+  onChartTypeChange: (ct: ChartType) => void;
+}) {
   const chartRef = useRef<HTMLDivElement>(null);
   const { prices } = useMarketStore();
   const priceData = prices.find((p) => p.symbol === pair.base);
 
-  // Generate demo candle data
-  const candles = Array.from({ length: 50 }, (_, i) => {
+  // Generate candle data based on timeframe
+  const generateCandles = (): Candle[] => {
+    const candleCount = timeframe === "1m_year" ? 365 : timeframe.includes("1m") ? 100 : 50;
+    const intervalMap: Record<Timeframe, number> = {
+      "1m": 60000,
+      "5m": 300000,
+      "15m": 900000,
+      "1h": 3600000,
+      "4h": 14400000,
+      "1d": 86400000,
+      "1w": 604800000,
+      "1m_year": 2592000000, // 30 days
+    };
+    const interval = intervalMap[timeframe];
+    
     const base = priceData?.price || 60000;
     const variance = base * 0.02;
-    const open = base + (Math.random() - 0.5) * variance;
-    const close = open + (Math.random() - 0.5) * variance * 0.8;
-    return {
-      time: Date.now() - (50 - i) * 3600000,
-      open,
-      high: Math.max(open, close) + Math.random() * variance * 0.3,
-      low: Math.min(open, close) - Math.random() * variance * 0.3,
-      close,
-    };
-  });
+    
+    return Array.from({ length: candleCount }, (_, i) => {
+      const open = base + (Math.random() - 0.5) * variance;
+      const close = open + (Math.random() - 0.5) * variance * 0.8;
+      return {
+        time: Date.now() - (candleCount - i) * interval,
+        open,
+        high: Math.max(open, close) + Math.random() * variance * 0.3,
+        low: Math.min(open, close) - Math.random() * variance * 0.3,
+        close,
+        volume: Math.random() * 1000000 + 100000,
+      };
+    });
+  };
 
-  const high = Math.max(...candles.map((c) => c.high));
-  const low = Math.min(...candles.map((c) => c.low));
+  const candles = generateCandles();
+  const high = Math.max(...candles.map((c: Candle) => c.high));
+  const low = Math.min(...candles.map((c: Candle) => c.low));
   const range = high - low || 1;
 
+  // Format timeframe label
+  const timeframeLabels: Record<Timeframe, string> = {
+    "1m": "1 Min",
+    "5m": "5 Min",
+    "15m": "15 Min",
+    "1h": "1 Hour",
+    "4h": "4 Hour",
+    "1d": "Daily",
+    "1w": "Weekly",
+    "1m_year": "Monthly (1Y)",
+  };
+
+  const renderChart = () => {
+    if (chartType === "candlestick") {
+      return (
+        <svg ref={chartRef as any} viewBox="0 0 800 300" className="w-full h-full" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(0,229,255,0.15)" />
+              <stop offset="100%" stopColor="rgba(0,229,255,0)" />
+            </linearGradient>
+          </defs>
+
+          {/* Grid lines */}
+          {[0.25, 0.5, 0.75].map((pct) => (
+            <line
+              key={pct}
+              x1="0" y1={pct * 280 + 10} x2="800" y2={pct * 280 + 10}
+              stroke="rgba(90,106,138,0.1)" strokeDasharray="4 4"
+            />
+          ))}
+
+          {/* Candlesticks */}
+          {candles.map((c: Candle, i: number) => {
+            const x = (i / candles.length) * 780 + 10;
+            const width = Math.max(780 / candles.length * 0.7, 1);
+            const isGreen = c.close >= c.open;
+            const color = isGreen ? "#00e676" : "#ff5252";
+            const bodyTop = 280 - ((Math.max(c.open, c.close) - low) / range) * 260 + 10;
+            const bodyBottom = 280 - ((Math.min(c.open, c.close) - low) / range) * 260 + 10;
+            const wickTop = 280 - ((c.high - low) / range) * 260 + 10;
+            const wickBottom = 280 - ((c.low - low) / range) * 260 + 10;
+
+            return (
+              <g key={i}>
+                <line x1={x} y1={wickTop} x2={x} y2={wickBottom} stroke={color} strokeWidth="1" opacity="0.6" />
+                <rect
+                  x={x - width / 2} y={bodyTop}
+                  width={width} height={Math.max(bodyBottom - bodyTop, 1)}
+                  fill={color} opacity="0.85" rx="1"
+                />
+              </g>
+            );
+          })}
+
+          {/* Grid background */}
+          <rect x="0" y="0" width="800" height="300" fill="transparent" opacity="0.3" />
+        </svg>
+      );
+    } else if (chartType === "line") {
+      return (
+        <svg ref={chartRef as any} viewBox="0 0 800 300" className="w-full h-full" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(0,229,255,0.25)" />
+              <stop offset="100%" stopColor="rgba(0,229,255,0)" />
+            </linearGradient>
+          </defs>
+
+          {/* Grid lines */}
+          {[0.25, 0.5, 0.75].map((pct) => (
+            <line key={pct} x1="0" y1={pct * 280 + 10} x2="800" y2={pct * 280 + 10} stroke="rgba(90,106,138,0.1)" strokeDasharray="4 4" />
+          ))}
+
+          {/* Line path */}
+          <path
+            d={`M ${candles.map((c: Candle, i: number) => `${(i / candles.length) * 780 + 10},${280 - ((c.close - low) / range) * 260 + 10}`).join(" L ")}`}
+            stroke="#00e5ff" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"
+          />
+
+          {/* Area under line */}
+          <path
+            d={`M ${candles.map((c: Candle, i: number) => `${(i / candles.length) * 780 + 10},${280 - ((c.close - low) / range) * 260 + 10}`).join(" L ")} L 790,290 L 10,290 Z`}
+            fill="url(#lineGrad)"
+          />
+        </svg>
+      );
+    } else {
+      // Area chart
+      return (
+        <svg ref={chartRef as any} viewBox="0 0 800 300" className="w-full h-full" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(76,175,80,0.4)" />
+              <stop offset="100%" stopColor="rgba(76,175,80,0.05)" />
+            </linearGradient>
+          </defs>
+
+          {/* Grid lines */}
+          {[0.25, 0.5, 0.75].map((pct) => (
+            <line key={pct} x1="0" y1={pct * 280 + 10} x2="800" y2={pct * 280 + 10} stroke="rgba(90,106,138,0.1)" strokeDasharray="4 4" />
+          ))}
+
+          {/* Area path */}
+          <path
+            d={`M ${candles.map((c: Candle, i: number) => `${(i / candles.length) * 780 + 10},${280 - ((c.close - low) / range) * 260 + 10}`).join(" L ")} L 790,290 L 10,290 Z`}
+            fill="url(#areaGrad)" stroke="none"
+          />
+        </svg>
+      );
+    }
+  };
+
   return (
-    <div className="relative w-full h-72 sm:h-80">
-      {/* Price indicator */}
-      <div className="absolute top-3 left-3 z-10">
-        <div className="flex items-baseline gap-2">
-          <span className="text-xl font-display font-bold text-text-primary">
-            {formatUsd(priceData?.price || 0)}
-          </span>
-          <span className={`text-xs font-mono ${(priceData?.change24h || 0) >= 0 ? "text-success" : "text-danger"}`}>
-            {formatPercent(priceData?.change24h || 0)}
-          </span>
+    <div className="relative w-full h-96">
+      {/* Chart Header */}
+      <div className="absolute top-0 left-0 right-0 z-10 px-4 py-3 flex items-center justify-between bg-gradient-to-b from-bg-elevated/50 to-transparent border-b border-border-subtle">
+        <div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-display font-bold text-text-primary">
+              {formatUsd(priceData?.price || 0)}
+            </span>
+            <span className={`text-sm font-mono ${(priceData?.change24h || 0) >= 0 ? "text-success" : "text-danger"}`}>
+              {formatPercent(priceData?.change24h || 0)}
+            </span>
+          </div>
+          <p className="text-xs text-text-muted mt-1">
+            H: {formatUsd(priceData?.high24h || 0)} · L: {formatUsd(priceData?.low24h || 0)}
+          </p>
         </div>
-        <p className="text-2xs text-text-muted mt-0.5">
-          H: {formatUsd(priceData?.high24h || 0)} · L: {formatUsd(priceData?.low24h || 0)}
-        </p>
+        <div className="text-right">
+          <p className="text-2xs text-text-muted mb-1">Timeframe</p>
+          <p className="text-sm font-semibold text-accent-cyan">{timeframeLabels[timeframe]}</p>
+        </div>
       </div>
 
-      {/* SVG Chart */}
-      <svg ref={chartRef as any} viewBox="0 0 800 300" className="w-full h-full" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(0,229,255,0.15)" />
-            <stop offset="100%" stopColor="rgba(0,229,255,0)" />
-          </linearGradient>
-        </defs>
+      {/* Chart */}
+      <div className="mt-16 w-full h-64">
+        {renderChart()}
+      </div>
 
-        {/* Grid lines */}
-        {[0.25, 0.5, 0.75].map((pct) => (
-          <line
-            key={pct}
-            x1="0" y1={pct * 280 + 10} x2="800" y2={pct * 280 + 10}
-            stroke="rgba(90,106,138,0.1)" strokeDasharray="4 4"
-          />
-        ))}
-
-        {/* Area fill */}
-        <path
-          d={`M ${candles.map((c, i) => `${(i / candles.length) * 780 + 10},${280 - ((c.close - low) / range) * 260 + 10}`).join(" L ")} L 790,290 L 10,290 Z`}
-          fill="url(#chartGrad)"
-        />
-
-        {/* Candlesticks */}
-        {candles.map((c, i) => {
-          const x = (i / candles.length) * 780 + 10;
-          const width = 780 / candles.length * 0.6;
-          const isGreen = c.close >= c.open;
-          const color = isGreen ? "#00e676" : "#ff5252";
-          const bodyTop = 280 - ((Math.max(c.open, c.close) - low) / range) * 260 + 10;
-          const bodyBottom = 280 - ((Math.min(c.open, c.close) - low) / range) * 260 + 10;
-          const wickTop = 280 - ((c.high - low) / range) * 260 + 10;
-          const wickBottom = 280 - ((c.low - low) / range) * 260 + 10;
-
-          return (
-            <g key={i}>
-              <line x1={x} y1={wickTop} x2={x} y2={wickBottom} stroke={color} strokeWidth="1" opacity="0.6" />
-              <rect
-                x={x - width / 2} y={bodyTop}
-                width={width} height={Math.max(bodyBottom - bodyTop, 1)}
-                fill={color} opacity="0.8" rx="0.5"
-              />
-            </g>
-          );
-        })}
-
-        {/* Price line */}
-        <line x1="0" y1={280 - (((priceData?.price || candles[candles.length - 1].close) - low) / range) * 260 + 10}
-              x2="800" y2={280 - (((priceData?.price || candles[candles.length - 1].close) - low) / range) * 260 + 10}
-              stroke="rgba(0,229,255,0.4)" strokeDasharray="3 3" strokeWidth="0.5" />
-      </svg>
+      {/* Legend */}
+      <div className="absolute bottom-2 right-4 text-2xs text-text-muted space-y-0.5">
+        <div>📊 High: {formatUsd(high)}</div>
+        <div>📉 Low: {formatUsd(low)}</div>
+      </div>
     </div>
   );
 }
@@ -449,6 +569,8 @@ function OpenOrders() {
 export default function TradePage() {
   const { selectedPair, fetchPrices, setSelectedPair } = useMarketStore();
   const [mounted, setMounted] = useState(false);
+  const [timeframe, setTimeframe] = useState<Timeframe>("1h");
+  const [chartType, setChartType] = useState<ChartType>("candlestick");
 
   useEffect(() => {
     setMounted(true);
@@ -458,6 +580,9 @@ export default function TradePage() {
   }, [fetchPrices]);
 
   if (!mounted) return null;
+
+  const timeframes: Timeframe[] = ["1m", "5m", "15m", "1h", "4h", "1d", "1w", "1m_year"];
+  const chartTypes: ChartType[] = ["candlestick", "line", "area"];
 
   return (
     <div className="min-h-screen">
@@ -484,19 +609,56 @@ export default function TradePage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
           {/* Chart */}
           <div className="lg:col-span-7 glass-panel overflow-hidden">
-            <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-text-primary">
-                {selectedPair.base}/{selectedPair.quote}
-              </h2>
-              <div className="flex gap-1">
-                {["1H", "4H", "1D", "1W"].map((tf) => (
-                  <button key={tf} className="px-2 py-1 text-2xs text-text-muted hover:text-text-secondary rounded transition-colors">
-                    {tf}
+            <div className="px-4 py-3 border-b border-border-subtle space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-text-primary">
+                  {selectedPair.base}/{selectedPair.quote}
+                </h2>
+                <div className="flex items-center gap-2">
+                  {/* Chart Type Selector */}
+                  <div className="flex gap-1 bg-bg-primary rounded-lg p-1">
+                    {chartTypes.map((ct) => (
+                      <button
+                        key={ct}
+                        onClick={() => setChartType(ct)}
+                        title={ct.charAt(0).toUpperCase() + ct.slice(1)}
+                        className={`w-8 h-8 rounded flex items-center justify-center text-xs font-semibold transition-all ${
+                          chartType === ct
+                            ? "bg-accent-cyan text-bg-elevated"
+                            : "text-text-muted hover:text-text-secondary hover:bg-bg-hover"
+                        }`}
+                      >
+                        {ct === "candlestick" ? "📊" : ct === "line" ? "📈" : "📉"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Timeframe Selector */}
+              <div className="flex gap-1 flex-wrap">
+                {timeframes.map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => setTimeframe(tf)}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      timeframe === tf
+                        ? "bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/30"
+                        : "text-text-muted hover:text-text-secondary border border-transparent hover:bg-bg-hover"
+                    }`}
+                  >
+                    {tf === "1m_year" ? "1Y" : tf.toUpperCase()}
                   </button>
                 ))}
               </div>
             </div>
-            <PriceChart pair={selectedPair} />
+            <PriceChart 
+              pair={selectedPair}
+              timeframe={timeframe}
+              chartType={chartType}
+              onTimeframeChange={setTimeframe}
+              onChartTypeChange={setChartType}
+            />
           </div>
 
           {/* Order Book */}
