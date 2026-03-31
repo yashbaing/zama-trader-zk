@@ -37,6 +37,14 @@ interface AdvancedChartProps {
   };
 }
 
+interface CrosshairData {
+  x: number;
+  y: number;
+  price: number;
+  time: string;
+  candle?: Candle;
+}
+
 export default function AdvancedTradingChart({
   pair,
   timeframe,
@@ -48,7 +56,8 @@ export default function AdvancedTradingChart({
   const [candles, setCandles] = useState<Candle[]>([]);
   const [indicatorData, setIndicatorData] = useState<ChartIndicators>({});
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [dragStart, setDragStart] = useState<number | null>(null);
+  const [crosshair, setCrosshair] = useState<CrosshairData | null>(null);
+  const [stats, setStats] = useState({ high: 0, low: 0, change: 0 });
 
   // Generate candles
   useEffect(() => {

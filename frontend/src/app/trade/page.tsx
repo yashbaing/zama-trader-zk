@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Header from "@/components/layout/Header";
-import AdvancedTradingChart from "@/components/trading/AdvancedTradingChart";
+import ProfessionalChart from "@/components/trading/ProfessionalChart";
 import { useWalletStore, useMarketStore, useTradingStore } from "@/store";
 import { formatUsd, formatCrypto, formatPercent } from "@/lib/utils";
 import { TRADING_PAIRS } from "@/lib/contracts";
@@ -730,7 +730,7 @@ export default function TradePage() {
           {/* Chart Container */}
           <div className="flex-1 min-h-0 glass-panel overflow-hidden">
             <div className="w-full h-full">
-              <AdvancedTradingChart
+              <ProfessionalChart
                 pair={selectedPair}
                 timeframe={timeframe}
                 chartType={chartType}
