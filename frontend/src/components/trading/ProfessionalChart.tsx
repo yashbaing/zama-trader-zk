@@ -412,10 +412,10 @@ function drawGrid(
   padding: number,
   gridColor: string
 ) {
-  ctx.strokeStyle = gridColor;
   ctx.lineWidth = 1;
 
-  // Horizontal lines
+  // Horizontal lines - thinner grid
+  ctx.strokeStyle = "rgba(90, 106, 138, 0.08)";
   for (let i = 0; i <= 10; i++) {
     const y = padding + (chartHeight / 10) * i;
     ctx.beginPath();
@@ -424,8 +424,9 @@ function drawGrid(
     ctx.stroke();
   }
 
-  // Vertical lines
+  // Vertical lines - thinner grid
   const chartWidth = width - padding * 2;
+  ctx.strokeStyle = "rgba(90, 106, 138, 0.06)";
   for (let i = 0; i <= 10; i++) {
     const x = padding + (chartWidth / 10) * i;
     ctx.beginPath();
@@ -433,6 +434,22 @@ function drawGrid(
     ctx.lineTo(x, padding + chartHeight);
     ctx.stroke();
   }
+
+  // Stronger axis lines
+  ctx.strokeStyle = "rgba(90, 106, 138, 0.25)";
+  ctx.lineWidth = 1.5;
+  
+  // Y axis
+  ctx.beginPath();
+  ctx.moveTo(padding - 1, padding);
+  ctx.lineTo(padding - 1, padding + chartHeight);
+  ctx.stroke();
+
+  // X axis
+  ctx.beginPath();
+  ctx.moveTo(padding, padding + chartHeight + 0.5);
+  ctx.lineTo(width - padding, padding + chartHeight + 0.5);
+  ctx.stroke();
 }
 
 function drawCandlesticks(
@@ -445,41 +462,88 @@ function drawCandlesticks(
   low: number,
   displayWidth: number
 ) {
-  const wickWidth = 0.2;
-  const bodyWidth = Math.max(chartWidth / candles.length * 0.6, 1);
+  const bodyWidth = Math.max(chartWidth / candles.length * 0.5, 2);
+  const wickWidth = Math.max(bodyWidth * 0.25, 0.5);
 
   candles.forEach((candle, i) => {
     const x = padding + (i / candles.length) * chartWidth + chartWidth / (candles.length * 2);
     const isUp = candle.close >= candle.open;
 
-    // Wick
+    // Calculate Y positions
     const highY = padding + chartHeight - ((candle.high - low) / range) * chartHeight;
     const lowY = padding + chartHeight - ((candle.low - low) / range) * chartHeight;
-
-    ctx.strokeStyle = isUp ? COLORS.up : COLORS.down;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, highY);
-    ctx.lineTo(x, lowY);
-    ctx.stroke();
-
-    // Body
     const openY = padding + chartHeight - ((candle.open - low) / range) * chartHeight;
     const closeY = padding + chartHeight - ((candle.close - low) / range) * chartHeight;
 
     const bodyTop = Math.min(openY, closeY);
-    const bodyHeight = Math.abs(closeY - openY) || 2;
+    const bodyHeight = Math.abs(closeY - openY) || 1;
 
-    ctx.fillStyle = isUp ? COLORS.up : COLORS.down;
-    ctx.globalAlpha = 0.8;
-    ctx.fillRect(x - bodyWidth / 2, bodyTop, bodyWidth, bodyHeight);
+    const upColor = COLORS.up;
+    const downColor = COLORS.down;
+    const color = isUp ? upColor : downColor;
+
+    // Draw wick with anti-aliasing effect
+    ctx.strokeStyle = color;
+    ctx.lineWidth = wickWidth;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(x, highY);
+    ctx.lineTo(x, lowY);
+    ctx.stroke();
     ctx.globalAlpha = 1;
 
-    // Border
-    ctx.strokeStyle = isUp ? COLORS.up : COLORS.down;
+    // Draw body with gradient for depth
+    const bodyGradient = ctx.createLinearGradient(x - bodyWidth / 2, bodyTop, x - bodyWidth / 2, bodyTop + bodyHeight);
+    
+    if (isUp) {
+      bodyGradient.addColorStop(0, "rgba(0, 230, 118, 0.95)");
+      bodyGradient.addColorStop(1, "rgba(0, 200, 100, 0.85)");
+    } else {
+      bodyGradient.addColorStop(0, "rgba(255, 82, 82, 0.95)");
+      bodyGradient.addColorStop(1, "rgba(230, 60, 60, 0.85)");
+    }
+
+    ctx.fillStyle = bodyGradient;
+    
+    // Rounded rectangles for smoother look
+    const radius = Math.min(bodyWidth * 0.3, 2);
+    roundRect(ctx, x - bodyWidth / 2, bodyTop, bodyWidth, bodyHeight, radius);
+    ctx.fill();
+
+    // Border for definition
+    ctx.strokeStyle = color;
     ctx.lineWidth = 0.5;
-    ctx.strokeRect(x - bodyWidth / 2, bodyTop, bodyWidth, bodyHeight);
+    ctx.globalAlpha = 0.6;
+    roundRect(ctx, x - bodyWidth / 2, bodyTop, bodyWidth, bodyHeight, radius);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
   });
+}
+
+// Helper function for rounded rectangles
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 function drawLineChart(
@@ -570,17 +634,24 @@ function drawMovingAverage(
   ctx.lineWidth = lineWidth;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
+  ctx.globalAlpha = 0.85;
 
   ctx.beginPath();
+  let firstPoint = true;
   values.forEach((value, i) => {
-    if (value === undefined) return;
+    if (value === undefined || isNaN(value)) return;
     const x = padding + (i / values.length) * chartWidth;
     const y = padding + chartHeight - ((value - low) / range) * chartHeight;
 
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+    if (firstPoint) {
+      ctx.moveTo(x, y);
+      firstPoint = false;
+    } else {
+      ctx.lineTo(x, y);
+    }
   });
   ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 function drawBollingerBands(
@@ -593,15 +664,16 @@ function drawBollingerBands(
   low: number,
   displayWidth: number
 ) {
+  // Semi-transparent fill between bands
   const gradient = ctx.createLinearGradient(0, padding, 0, padding + chartHeight);
-  gradient.addColorStop(0, "rgba(255, 193, 7, 0.1)");
-  gradient.addColorStop(1, "rgba(255, 193, 7, 0.05)");
+  gradient.addColorStop(0, "rgba(255, 193, 7, 0.08)");
+  gradient.addColorStop(1, "rgba(255, 193, 7, 0.04)");
 
   ctx.fillStyle = gradient;
   ctx.beginPath();
 
   bollinger.upper.forEach((value, i) => {
-    if (value === undefined) return;
+    if (value === undefined || isNaN(value)) return;
     const x = padding + (i / bollinger.upper.length) * chartWidth;
     const y = padding + chartHeight - ((value - low) / range) * chartHeight;
     if (i === 0) ctx.moveTo(x, y);
@@ -610,7 +682,7 @@ function drawBollingerBands(
 
   for (let i = bollinger.lower.length - 1; i >= 0; i--) {
     const value = bollinger.lower[i];
-    if (value === undefined) continue;
+    if (value === undefined || isNaN(value)) continue;
     const x = padding + (i / bollinger.lower.length) * chartWidth;
     const y = padding + chartHeight - ((value - low) / range) * chartHeight;
     ctx.lineTo(x, y);
@@ -619,20 +691,46 @@ function drawBollingerBands(
   ctx.closePath();
   ctx.fill();
 
-  // Middle line
-  ctx.strokeStyle = "rgba(100, 150, 255, 0.6)";
+  // Upper band - thin line
+  ctx.strokeStyle = "rgba(255, 193, 7, 0.5)";
   ctx.lineWidth = 1;
-  ctx.setLineDash([5, 5]);
+  ctx.setLineDash([3, 3]);
+  ctx.globalAlpha = 0.7;
+  ctx.beginPath();
+  bollinger.upper.forEach((value, i) => {
+    if (value === undefined || isNaN(value)) return;
+    const x = padding + (i / bollinger.upper.length) * chartWidth;
+    const y = padding + chartHeight - ((value - low) / range) * chartHeight;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Lower band - thin line
+  ctx.beginPath();
+  bollinger.lower.forEach((value, i) => {
+    if (value === undefined || isNaN(value)) return;
+    const x = padding + (i / bollinger.lower.length) * chartWidth;
+    const y = padding + chartHeight - ((value - low) / range) * chartHeight;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Middle line - solid
+  ctx.strokeStyle = "rgba(100, 150, 255, 0.7)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
   ctx.beginPath();
   bollinger.middle.forEach((value, i) => {
-    if (value === undefined) return;
+    if (value === undefined || isNaN(value)) return;
     const x = padding + (i / bollinger.middle.length) * chartWidth;
     const y = padding + chartHeight - ((value - low) / range) * chartHeight;
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
   ctx.stroke();
-  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
 }
 
 function drawVolume(
@@ -646,20 +744,42 @@ function drawVolume(
 ) {
   const maxVolume = Math.max(...candles.map((c) => c.volume));
   const volumeScaleFactor = volumeHeight / maxVolume;
+  const barWidth = Math.max(chartWidth / candles.length * 0.5, 1);
 
   candles.forEach((candle, i) => {
     const x = padding + (i / candles.length) * chartWidth + chartWidth / (candles.length * 2);
-    const width = Math.max(chartWidth / candles.length * 0.6, 1);
     const isUp = candle.close >= candle.open;
     const barHeight = candle.volume * volumeScaleFactor;
+    const barY = padding + chartHeight + volumeHeight - barHeight;
 
-    ctx.fillStyle = isUp ? "rgba(0, 230, 118, 0.2)" : "rgba(255, 82, 82, 0.2)";
-    ctx.fillRect(
-      x - width / 2,
-      padding + chartHeight + volumeHeight - barHeight,
-      width,
-      barHeight
+    // Volume bar with subtle gradient
+    const volumeGradient = ctx.createLinearGradient(
+      x - barWidth / 2,
+      barY,
+      x - barWidth / 2,
+      barY + barHeight
     );
+
+    if (isUp) {
+      volumeGradient.addColorStop(0, "rgba(0, 230, 118, 0.25)");
+      volumeGradient.addColorStop(1, "rgba(0, 230, 118, 0.08)");
+    } else {
+      volumeGradient.addColorStop(0, "rgba(255, 82, 82, 0.25)");
+      volumeGradient.addColorStop(1, "rgba(255, 82, 82, 0.08)");
+    }
+
+    ctx.fillStyle = volumeGradient;
+    
+    // Rounded volume bars
+    const radius = Math.min(barWidth * 0.2, 1.5);
+    roundRect(ctx, x - barWidth / 2, barY, barWidth, barHeight, radius);
+    ctx.fill();
+
+    // Subtle border
+    ctx.strokeStyle = isUp ? "rgba(0, 230, 118, 0.4)" : "rgba(255, 82, 82, 0.4)";
+    ctx.lineWidth = 0.5;
+    roundRect(ctx, x - barWidth / 2, barY, barWidth, barHeight, radius);
+    ctx.stroke();
   });
 }
 
@@ -672,16 +792,37 @@ function drawPriceLabels(
   displayWidth: number,
   textColor: string
 ) {
-  ctx.fillStyle = textColor;
-  ctx.font = "12px sans-serif";
+  ctx.font = "12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
   ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.globalAlpha = 0.7;
 
   for (let i = 0; i <= 5; i++) {
     const price = high - ((high - low) / 5) * i;
     const y = padding + (chartHeight / 5) * i;
 
-    ctx.fillText(formatUsd(price), padding - 10, y + 4);
+    // Format label
+    const label = price > 1000 
+      ? `$${(price / 1000).toFixed(1)}k` 
+      : `$${price.toFixed(0)}`;
+    
+    const metrics = ctx.measureText(label);
+    const labelWidth = metrics.width + 8;
+    const labelHeight = 16;
+
+    // Background for label
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = "#ffffff";
+    roundRect(ctx, padding - labelWidth - 8, y - labelHeight / 2, labelWidth, labelHeight, 3);
+    ctx.fill();
+
+    // Text
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = textColor;
+    ctx.fillText(label, padding - 12, y);
   }
+
+  ctx.globalAlpha = 1;
 }
 
 function drawTimeLabels(
@@ -692,9 +833,11 @@ function drawTimeLabels(
   displayWidth: number,
   textColor: string
 ) {
-  ctx.fillStyle = textColor;
-  ctx.font = "12px sans-serif";
+  ctx.font = "12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
   ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.globalAlpha = 0.7;
+  ctx.fillStyle = textColor;
 
   for (let i = 0; i < 5; i++) {
     const index = Math.floor((i / 4) * (candles.length - 1));
@@ -703,8 +846,21 @@ function drawTimeLabels(
     const label = `${date.getHours()}:${String(date.getMinutes()).padStart(2, "0")}`;
 
     const x = padding + ((i / 4) * (displayWidth - padding * 2));
-    ctx.fillText(label, x, chartHeight + padding + 20);
+    
+    // Vertical line for time marker
+    ctx.strokeStyle = "rgba(90, 106, 138, 0.15)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 2]);
+    ctx.beginPath();
+    ctx.moveTo(x, padding + chartHeight);
+    ctx.lineTo(x, padding + chartHeight + 8);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillText(label, x, padding + chartHeight + 14);
   }
+
+  ctx.globalAlpha = 1;
 }
 
 function drawCrosshair(
