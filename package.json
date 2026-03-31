@@ -1,0 +1,24 @@
+{
+  "name": "zktrader",
+  "version": "1.0.0",
+  "description": "Privacy-Preserving Decentralized Trading Platform built on Zama fhEVM",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "contracts"
+  ],
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "cd frontend && pnpm build",
+    "start": "cd frontend && pnpm start",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "pnpm": "^10.33.0"
+  }
+}

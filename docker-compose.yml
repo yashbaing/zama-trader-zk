@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  # Local fhEVM node (for development)
+  fhevm:
+    image: ghcr.io/zama-ai/fhevm-devnet:latest
+    ports:
+      - "8545:8545"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Backend API server
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - ZAMA_RPC_URL=http://fhevm:8545
+      - CHAIN_ID=9000
+      - FRONTEND_URL=http://localhost:3000
+    depends_on:
+      fhevm:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+
+  # Frontend Next.js dev server
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001/api
+      - NEXT_PUBLIC_WS_URL=ws://localhost:3001/ws
+      - NEXT_PUBLIC_RPC_URL=http://localhost:8545
+      - NEXT_PUBLIC_CHAIN_ID=9000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src

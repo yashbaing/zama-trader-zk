@@ -1,0 +1,8 @@
+backend
+contracts
+docs
+node_modules
+.git
+.env.local
+.env.*.local
+*.log

@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+contracts/out/
+contracts/cache/
+contracts/artifacts/
+contracts/typechain-types/
+backend/dist/
+frontend/.next/
+frontend/out/
+
+# Environment files
+.env
+.env.local
+.env.production
+backend/.env
+frontend/.env.local
+
+# Deployment artifacts
+contracts/deployments.json
+contracts/broadcast/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Misc
+*.tgz
+*.tar.gz
